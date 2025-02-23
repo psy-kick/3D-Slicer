@@ -14,6 +14,10 @@ public class OpenFile : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        
+    }
+    public void OnClickOpen()
+    {
         string[] path = StandaloneFileBrowser.OpenFilePanel("Open File", "", "obj", false);
         if (path.Length > 0)
         {
@@ -30,16 +34,13 @@ public class OpenFile : MonoBehaviour
         }
         else
         {
-            //textMeshPro.text = www.downloadHandler.text;
-
-            //Load OBJ Model
             MemoryStream textStream = new MemoryStream(Encoding.UTF8.GetBytes(www.downloadHandler.text));
             if (model != null)
             {
                 Destroy(model);
             }
             model = new OBJLoader().Load(textStream);
-            model.transform.localScale = new Vector3(-1, 1, 1); // set the position of parent model. Reverse X to show properly 
+            model.transform.localScale = new Vector3(-1, 1, 1); 
         }
     }
     // Update is called once per frame
