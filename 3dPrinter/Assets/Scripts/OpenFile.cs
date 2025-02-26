@@ -31,6 +31,60 @@ public class OpenFile : MonoBehaviour
         //    StartCoroutine(OutputRoutineOpen(new System.Uri(path[0]).AbsoluteUri));
         //}
     }
+
+    private void WaterTightness()
+    {
+        MeshFilter modelFilter = model.GetComponentInChildren<MeshFilter>();
+        if (modelFilter == null)
+        {
+            Debug.LogError("No mesh filter found");
+            return;
+        }
+        Mesh modelmesh = modelFilter.mesh;
+        int[] triangles = modelmesh.triangles;
+        Dictionary<(Vector3, Vector3), int> edgeCount = new Dictionary<(Vector3, Vector3), int>();
+        for (int i= 0;i < triangles.Length; i += 3)
+        {
+            Vector3 v1 = modelmesh.vertices[triangles[i]];
+            Vector3 v2 = modelmesh.vertices[triangles[i+1]];
+            Vector3 v3 = modelmesh.vertices[triangles[i+2]];
+
+            AddEdge(edgeCount, v1, v2);
+            AddEdge(edgeCount, v2, v3);
+            AddEdge(edgeCount, v3, v1);
+        }
+        foreach(var edge in edgeCount)
+        {
+            if (edge.Value == 1)
+            {
+                Debug.LogError("Model is not watertight",gameObject);
+                return;
+            }
+            else
+            {
+                Debug.Log("model is watertight");
+            }
+        }
+    }
+
+    private void AddEdge(Dictionary<(Vector3, Vector3), int> edgeCount, Vector3 v1, Vector3 v2)
+    {
+        var edge = (v1, v2);
+        var reversedEdge = (v2, v1);
+        if(edgeCount.ContainsKey(reversedEdge))
+        {
+            edgeCount[reversedEdge]++;
+        }
+        else if (edgeCount.ContainsKey(edge))
+        {
+            edgeCount[edge]++;
+        }
+        else
+        {
+            edgeCount[edge] = 1;
+        }
+    }
+
     private IEnumerator LoadAndConvertSTL(string filePath)
     {
         if (!File.Exists(filePath))
@@ -93,6 +147,7 @@ public class OpenFile : MonoBehaviour
         }
 
         model = new OBJLoader().Load(textStream);
+        //WaterTightness();
         Shader customShader = Shader.Find("Universal Render Pipeline/Lit"); // Replace with your custom shader name
         if (customShader == null)
         {
