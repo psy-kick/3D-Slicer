@@ -978,7 +978,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 990884832}
         m_TargetAssemblyTypeName: OpenFile, Assembly-CSharp
-        m_MethodName: OnClickOpen
+        m_MethodName: OnClickOpenAsync
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
