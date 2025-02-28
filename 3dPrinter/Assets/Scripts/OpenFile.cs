@@ -145,10 +145,19 @@ public class OpenFile : MonoBehaviour
     private IEnumerator /*async Task*/ LoadOBJ(string objPath)
     {
         Debug.Log("starting to load");
+        if (objPath.StartsWith("file:///"))
+        {
+            objPath = new Uri(objPath).LocalPath;
+        }
+        if (!File.Exists(objPath))
+        {
+            Debug.LogError("File does not exist: " + objPath);
+            yield break;
+        }
         string directoryPath = Path.GetDirectoryName(objPath);
-
+        Debug.Log("Loading file from: " + objPath);
         UnityWebRequest www = UnityWebRequest.Get(objPath);
-        /*await*/ yield return www.SendWebRequest();
+        yield return www.SendWebRequest();
         Debug.Log("Test Request Status: " + www.result);
 
         if (www.result != UnityWebRequest.Result.Success)
@@ -157,7 +166,7 @@ public class OpenFile : MonoBehaviour
             yield break /*return*/;
         }
 
-        MemoryStream textStream = new MemoryStream(Encoding.UTF8.GetBytes(www.downloadHandler.text));
+        MemoryStream textStream = new MemoryStream(Encoding.UTF8.GetBytes(www.downloadHandler.text /*objPath*/));
 
 
         if (model != null)
@@ -169,6 +178,8 @@ public class OpenFile : MonoBehaviour
         //bool isComplete = false;
         //_ = WaterTightness().ContinueWith(_ => isComplete = true);
         //yield return new WaitUntil(() => isComplete);
+        Mesh mesh = model.GetComponentInChildren<MeshFilter>().mesh;
+        Debug.Log($"Mesh has {mesh.vertices.Length} vertices and {mesh.triangles.Length / 3} triangles.");
         yield return StartCoroutine(WaterTightness());
         Shader customShader = Shader.Find("Universal Render Pipeline/Lit"); // Replace with your custom shader name
         if (customShader == null)
@@ -183,7 +194,17 @@ public class OpenFile : MonoBehaviour
             {
                 mat.shader = customShader;
             }
-            model.transform.localScale = new Vector3(-1, 1, 1);
+            model.transform.localScale = Vector3.one; // Reset scale
+            model.transform.rotation = Quaternion.identity; // Reset rotation
+            model.transform.position = Vector3.zero; // Reset position
+
+        }
+        foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter>())
+        {
+            filter.mesh.RecalculateNormals();
+            filter.mesh.RecalculateBounds();
+            filter.mesh.RecalculateTangents();
+            filter.mesh.Optimize();
         }
     }
     public async void ExportToSTLAsync(string filePath)
