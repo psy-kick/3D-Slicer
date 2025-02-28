@@ -142,9 +142,8 @@ public class OpenFile : MonoBehaviour
     //    File.WriteAllText(path, content, Encoding.UTF8);
     //    Debug.Log($"OBJ File Saved: {path}");
     //}
-    private IEnumerator /*async Task*/ LoadOBJ(string objPath)
+    private IEnumerator LoadOBJ(string objPath)
     {
-        Debug.Log("starting to load");
         if (objPath.StartsWith("file:///"))
         {
             objPath = new Uri(objPath).LocalPath;
@@ -163,10 +162,10 @@ public class OpenFile : MonoBehaviour
         if (www.result != UnityWebRequest.Result.Success)
         {
             Debug.LogError("Failed to load OBJ: " + www.error);
-            yield break /*return*/;
+            yield break;
         }
 
-        MemoryStream textStream = new MemoryStream(Encoding.UTF8.GetBytes(www.downloadHandler.text /*objPath*/));
+        MemoryStream textStream = new MemoryStream(Encoding.UTF8.GetBytes(www.downloadHandler.text));
 
 
         if (model != null)
@@ -174,14 +173,11 @@ public class OpenFile : MonoBehaviour
             Destroy(model);
         }
 
-        model = /*await Task.Run(() => */new OBJLoader().Load(textStream)/*)*/;
-        //bool isComplete = false;
-        //_ = WaterTightness().ContinueWith(_ => isComplete = true);
-        //yield return new WaitUntil(() => isComplete);
+        model = new OBJLoader().Load(textStream);
         Mesh mesh = model.GetComponentInChildren<MeshFilter>().mesh;
-        Debug.Log($"Mesh has {mesh.vertices.Length} vertices and {mesh.triangles.Length / 3} triangles.");
+
         yield return StartCoroutine(WaterTightness());
-        Shader customShader = Shader.Find("Universal Render Pipeline/Lit"); // Replace with your custom shader name
+        Shader customShader = Shader.Find("Universal Render Pipeline/Lit");
         if (customShader == null)
         {
             Debug.LogError("Shader not found!");
@@ -222,7 +218,7 @@ public class OpenFile : MonoBehaviour
             return;
         }
         Mesh mesh = meshFilter.mesh;
-        Vector3[] vertices = mesh.vertices;  // Copy vertices
+        Vector3[] vertices = mesh.vertices;
         int[] triangles = mesh.triangles;
 
         Debug.Log("Starting STL Export...");
