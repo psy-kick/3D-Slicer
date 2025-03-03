@@ -8,37 +8,100 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using System.Collections;
+using System.Runtime.CompilerServices;
+using UnityEngine.UI;
+using TMPro;
+using System.Linq;
+using UnityEngine.UIElements;
+using System.Threading;
 
 public class OpenFile : MonoBehaviour
 {
     [HideInInspector]
     public GameObject model;
+    [SerializeField]
+    private float LayerHeight = 10f;
+    private Vector3[] vertices;
+    private int[] triangles;
+    private float minY, maxY;
+    List<(Vector3, Vector3, Vector3)> triangleVertices;
+    List<List<Vector3>> slices = new List<List<Vector3>>();
+    public Material lineMaterial;
+    private CancellationTokenSource cancellationTokenSource;
     //private SaveSTLtoOBJ stlConverter;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        //stlConverter = new SaveSTLtoOBJ();
+        
     }
-    //public void onClickOpen()
-    //{
-    //    _ = OnClickOpenAsync();
-    //}
-    public void /*async Task*/ OnClickOpenAsync()
+    public async Task PrecomputeModel()
+    {
+        Debug.Log("precompute");
+        if (model == null)
+        {
+            Debug.LogError("model not loaded yet");
+            return;
+        }
+        MeshFilter modelFilter = model.GetComponentInChildren<MeshFilter>();
+        Mesh mesh = modelFilter.mesh;
+        if (mesh == null)
+        {
+            Debug.LogError("Mesh not found in model!");
+            return;
+        }
+
+        vertices = mesh.vertices;
+        triangles = mesh.triangles;
+
+        if (vertices == null || triangles == null || triangles.Length == 0)
+        {
+            Debug.LogError("Mesh data is invalid! Vertices or triangles are null/empty.");
+            return;
+        }
+
+        minY = mesh.bounds.min.y;
+        maxY = mesh.bounds.max.y;
+
+        Debug.Log($"Starting Task.Run() with {triangles.Length / 3} triangles.");
+
+        triangleVertices = await Task.Run(() =>
+        {
+            Debug.Log("tri");
+            List<(Vector3, Vector3, Vector3)> tempTriangleVertices = new List<(Vector3, Vector3, Vector3)>(triangles.Length / 3);
+            for (int i = 0; i < triangles.Length; i += 3)
+            {
+                //Vector3 v1 = vertices[triangles[i]];
+                //Vector3 v2 = vertices[triangles[i + 1]];
+                //Vector3 v3 = vertices[triangles[i + 2]];
+
+                tempTriangleVertices.Add((vertices[triangles[i]],
+                                      vertices[triangles[i + 1]],
+                                      vertices[triangles[i + 2]]));
+            }
+            return tempTriangleVertices;
+        });
+        //Debug.Log("Model computed");
+        //triangleVertices = new List<(Vector3, Vector3, Vector3)>(triangles.Length / 3);
+        //for (int i = 0; i < triangles.Length; i += 3)
+        //{
+        //    triangleVertices.Add((vertices[triangles[i]],
+        //                          vertices[triangles[i + 1]],
+        //                          vertices[triangles[i + 2]]));
+        //}
+        Debug.Log($"Model computed with {triangleVertices.Count} triangles.");
+    }
+    public void OnClickOpenAsync()
     {
         Debug.Log("runs");
         string[] path = StandaloneFileBrowser.OpenFilePanel("Open File", "", "obj", false);
         if (path.Length > 0)
         {
-            //StartCoroutine(LoadAndConvertSTL(path[0]));
             StartCoroutine(LoadOBJ(new System.Uri(path[0]).AbsoluteUri));
-            //await LoadOBJ(path[0]);
         }
-        //    StartCoroutine(OutputRoutineOpen(new System.Uri(path[0]).AbsoluteUri));
-        //}
     }
 
-    private /*async Task*/ IEnumerator WaterTightness()
+    private IEnumerator WaterTightness()
     {
         Debug.Log("this ran");
         MeshFilter modelFilter = model.GetComponentInChildren<MeshFilter>();
@@ -48,18 +111,24 @@ public class OpenFile : MonoBehaviour
             Debug.LogError("No mesh filter found");
             /*return*/ yield break;
         }
-        Mesh modelmesh = modelFilter.mesh;
-        Vector3[] vertices = modelmesh.vertices;
-        int[] triangles = modelmesh.triangles;
+        //Mesh modelmesh = modelFilter.mesh;
+        //Vector3[] vertices = modelmesh.vertices;
+        //int[] triangles = modelmesh.triangles;
         Dictionary<(Vector3, Vector3), int> edgeCount = new Dictionary<(Vector3, Vector3), int>();
         Task<bool> task = Task.Run(() =>
         {
-            for (int i = 0; i < triangles.Length; i += 3)
-            {
-                Vector3 v1 = vertices[triangles[i]];
-                Vector3 v2 = vertices[triangles[i + 1]];
-                Vector3 v3 = vertices[triangles[i + 2]];
+            //for (int i = 0; i < triangles.Length; i += 3)
+            //{
+            //    Vector3 v1 = vertices[triangles[i]];
+            //    Vector3 v2 = vertices[triangles[i + 1]];
+            //    Vector3 v3 = vertices[triangles[i + 2]];
 
+            //    AddEdge(edgeCount, v1, v2);
+            //    AddEdge(edgeCount, v2, v3);
+            //    AddEdge(edgeCount, v3, v1);
+            //}
+            foreach (var (v1,v2,v3) in triangleVertices)
+            {
                 AddEdge(edgeCount, v1, v2);
                 AddEdge(edgeCount, v2, v3);
                 AddEdge(edgeCount, v3, v1);
@@ -102,46 +171,6 @@ public class OpenFile : MonoBehaviour
         }
     }
 
-    //private IEnumerator LoadAndConvertSTL(string filePath)
-    //{
-    //    if (!File.Exists(filePath))
-    //    {
-    //        Debug.LogError("File does not exist: " + filePath);
-    //        yield break;
-    //    }
-
-    //    byte[] fileData = File.ReadAllBytes(filePath);
-    //    Mesh mesh = ParseSTL(fileData);
-    //    Mesh testMesh = ParseSTL(File.ReadAllBytes(filePath));
-    //    Debug.Log($"Vertices: {testMesh.vertexCount}, Triangles: {testMesh.triangles.Length}");
-
-    //    if (mesh == null)
-    //    {
-    //        Debug.LogError("Failed to parse STL file.");
-    //        yield break;
-    //    }
-
-    //    // Save as OBJ for easier loading
-    //    Task<string> conversionTask = stlConverter.ConvertMeshToOBJAsync(mesh);
-    //    yield return new WaitUntil(() => conversionTask.IsCompleted);
-    //    string objContent = conversionTask.Result;
-    //    if (objContent == null)
-    //    {
-    //        Debug.LogError("OBJ conversion failed.");
-    //        yield break;
-    //    }
-    //    string objPath = Path.ChangeExtension(filePath, ".obj");
-    //    yield return StartCoroutine(SaveOBJOnMainThread(objPath, objContent));
-    //    // Load OBJ
-    //    StartCoroutine(LoadOBJ(objPath));
-    //}
-    //private IEnumerator SaveOBJOnMainThread(string path, string content)
-    //{
-    //    yield return new WaitForEndOfFrame(); // Ensure this runs on the main thread
-    //    Debug.Log("This runs");
-    //    File.WriteAllText(path, content, Encoding.UTF8);
-    //    Debug.Log($"OBJ File Saved: {path}");
-    //}
     private IEnumerator LoadOBJ(string objPath)
     {
         if (objPath.StartsWith("file:///"))
@@ -174,6 +203,10 @@ public class OpenFile : MonoBehaviour
         }
 
         model = new OBJLoader().Load(textStream);
+
+        Task precomputeTask = PrecomputeModel();
+        yield return new WaitUntil(() => precomputeTask.IsCompleted);
+
         Mesh mesh = model.GetComponentInChildren<MeshFilter>().mesh;
 
         yield return StartCoroutine(WaterTightness());
@@ -181,7 +214,7 @@ public class OpenFile : MonoBehaviour
         if (customShader == null)
         {
             Debug.LogError("Shader not found!");
-            yield break /*return*/;
+            yield break;
         }
 
         foreach (MeshRenderer renderer in model.GetComponentsInChildren<MeshRenderer>())
@@ -258,6 +291,167 @@ public class OpenFile : MonoBehaviour
             Debug.LogError($"STL export failed: {ex.Message}");
         }
     }
+    public void OnSliceButtonClick()
+    {
+        //StartCoroutine(SliceMeshAsync(minY, maxY));
+        StartCoroutine(WaitForSlicing());
+        //Debug.Log(slicedLayers.Count);
+    }
+    private IEnumerator WaitForSlicing()
+    {
+        Task slicingTask = SliceMeshAsync(minY, maxY);
+        while (!slicingTask.IsCompleted) yield return null;
+
+        Debug.Log("Slicing is finished, proceeding...");
+    }
+    public async Task SliceMeshAsync(float minY, float maxY)
+    {
+        Debug.Log("Slicing");
+        slices.Clear();
+        float minYVal = triangleVertices.Min(t => Mathf.Min(t.Item1.y, t.Item2.y, t.Item3.y));
+        float maxYVal = triangleVertices.Max(t => Mathf.Max(t.Item1.y, t.Item2.y, t.Item3.y));
+        Debug.Log($"Calculated minY: {minYVal}, maxY: {maxYVal}");
+        await Task.Run(() =>
+        {
+            Debug.Log("Inside Task.Run, slicing...");
+            Debug.Log($"Height range: minY = {minY}, maxY = {maxY}, LayerHeight = {LayerHeight}");
+            Debug.Log($"Total Iterations: {(int)((maxY - minY) / LayerHeight)}");
+            for (float height = minY; height <= maxY; height += LayerHeight)
+            {
+                Debug.Log("par runs");
+                List<Vector3> slicepoints = new List<Vector3>();
+                Debug.Log("Entering foreach loop...");
+                foreach (var (v1, v2, v3) in triangleVertices)
+                {
+                    Debug.Log($"Checking Triangle: V1={v1}, V2={v2}, V3={v3} at height {height}");
+                    Vector3? p1 = IntersectEdges(v1, v2, height);
+                    Vector3? p2 = IntersectEdges(v2, v3, height);
+                    Vector3? p3 = IntersectEdges(v3, v1, height);
+
+                    if (p1.HasValue)
+                    {
+                        Debug.Log($"Intersection Found: {p1.Value} at height {height}");
+                        slicepoints.Add(p1.Value);
+                    }
+                    if (p2.HasValue)
+                    {
+                        Debug.Log($"Intersection Found: {p2.Value} at height {height}");
+                        slicepoints.Add(p2.Value);
+                    }
+                    if (p3.HasValue)
+                    {
+                        Debug.Log($"Intersection Found: {p3.Value} at height {height}");
+                        slicepoints.Add(p3.Value);
+                    }
+                }
+                if (slicepoints.Count > 0)
+                {
+                    lock (slices)
+                    {
+                        slices.Add(slicepoints);
+                    }
+                    //slices.Add(slicepoints);
+                }
+                //if (slices.Count % 50 == 0)
+                //{
+                //    await Task.Yield(); // Wait for the next frame
+                //}
+            }
+            Debug.Log(slices.Count);
+            //for (float height = minY; height <= maxY; height += LayerHeight)
+            //{
+            //    //Debug.Log($"Slicing at height: {height}");
+            //    //List<Vector3> slicepoints = new List<Vector3>();
+
+            //}
+        });
+
+        Debug.Log(slices.Count);
+        CreateLineRenderers();
+    }
+    private void CreateLineRenderers()
+    {
+        // Remove old line renderers before drawing new ones
+        foreach (Transform child in transform)
+        {
+            Destroy(child.gameObject);
+        }
+
+        foreach (var slice in slices)
+        {
+            if (slice.Count < 2) continue; // Skip if there are not enough points to connect
+
+            GameObject lineObj = new GameObject("SliceLine");
+            lineObj.transform.SetParent(transform);
+            LineRenderer lr = lineObj.AddComponent<LineRenderer>();
+
+            lr.positionCount = slice.Count;
+            lr.startWidth = 0.01f;
+            lr.endWidth = 0.01f;
+            lr.material = lineMaterial; // Assign a default material
+            lr.startColor = Color.yellow;
+            lr.endColor = Color.red;
+            lr.useWorldSpace = true;
+            lr.SetPositions(slice.ToArray());
+        }
+    }
+    //public List<List<Vector3>> Slicing()
+    //{
+    //    if (model == null)
+    //    {
+    //        Debug.LogError("Model not found");
+    //        return null;
+    //    }
+    //    List<List<Vector3>> slices = new List<List<Vector3>>();
+    //    Mesh mesh = model.GetComponentInChildren<MeshFilter>().mesh;
+    //    Vector3[] vertices = mesh.vertices;
+    //    int[] triangles = mesh.triangles;
+    //    float minY = mesh.bounds.min.y;
+    //    float maxY = mesh.bounds.max.y;
+    //    for(float height = minY; height <= maxY; height += LayerHeight)
+    //    {
+    //        List<Vector3> slicepoints = new List<Vector3>();
+
+    //        for(int i = 0; i < triangles.Length; i += 3)
+    //        {
+    //            Vector3 v1 = vertices[triangles[i]];
+    //            Vector3 v2 = vertices[triangles[i + 1]];
+    //            Vector3 v3 = vertices[triangles[i + 2]];
+
+    //            Vector3? p1 = IntersectEdges(v1, v2, height);
+    //            Vector3? p2 = IntersectEdges(v2, v3, height);
+    //            Vector3? p3 = IntersectEdges(v3, v1, height);
+
+    //            if (p1.HasValue)
+    //            {
+    //                slicepoints.Add(p1.Value);
+    //            }
+    //            if (p2.HasValue)
+    //            {
+    //                slicepoints.Add(p2.Value);
+    //            }
+    //            if (p3.HasValue)
+    //            {
+    //                slicepoints.Add(p3.Value);
+    //            }
+    //        }
+    //        slices.Add(slicepoints);
+    //    }
+    //    return slices;
+    //}
+
+    private Vector3? IntersectEdges(Vector3 v1, Vector3 v2, float height)
+    {
+        Debug.Log($"Checking edge: {v1} -> {v2} for intersection at height {height}");
+        if ((v1.y > height && v2.y < height) || (v1.y < height && v2.y > height))
+        {
+            float t = (height - v1.y) / (v2.y - v1.y);
+            Debug.Log("intersected");
+            return v1 + t * (v2 - v1);
+        }
+        return null;
+    }
+
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.E))
@@ -267,102 +461,6 @@ public class OpenFile : MonoBehaviour
             Debug.Log($"Exporting STL in background... Path: {path}");
         }
     }
-    //private Mesh ParseSTL(byte[] fileData)
-    //{
-    //    using (MemoryStream stream = new MemoryStream(fileData))
-    //    using (BinaryReader reader = new BinaryReader(stream))
-    //    {
-    //        string header = Encoding.UTF8.GetString(reader.ReadBytes(5));
-
-    //        if (header.StartsWith("solid"))
-    //        {
-    //            Debug.Log("Detected ASCII STL file.");
-    //            return ParseAsciiSTL(fileData);
-    //        }
-    //        else
-    //        {
-    //            Debug.Log("Detected Binary STL file.");
-    //            return ParseBinarySTL(fileData);
-    //        }
-    //    }
-    //}
-
-    //private Mesh ParseBinarySTL(byte[] fileData)
-    //{
-    //    using (MemoryStream stream = new MemoryStream(fileData))
-    //    using (BinaryReader reader = new BinaryReader(stream))
-    //    {
-    //        reader.ReadBytes(80); // Skip header
-    //        int triangleCount = reader.ReadInt32();
-
-    //        if (triangleCount <= 0)
-    //        {
-    //            Debug.LogError("Invalid STL file.");
-    //            return null;
-    //        }
-
-    //        List<Vector3> vertices = new List<Vector3>();
-    //        List<int> triangles = new List<int>();
-
-    //        for (int i = 0; i < triangleCount; i++)
-    //        {
-    //            reader.ReadBytes(12); // Skip normal
-
-    //            for (int j = 0; j < 3; j++)
-    //            {
-    //                float x = reader.ReadSingle();
-    //                float y = reader.ReadSingle();
-    //                float z = reader.ReadSingle();
-    //                vertices.Add(new Vector3(x, y, z));
-    //                triangles.Add(vertices.Count - 1);
-    //            }
-
-    //            reader.ReadUInt16(); // Skip attribute byte count
-    //        }
-
-    //        Mesh mesh = new Mesh
-    //        {
-    //            vertices = vertices.ToArray(),
-    //            triangles = triangles.ToArray()
-    //        };
-    //        mesh.RecalculateNormals();
-    //        Debug.Log("done parsing");
-    //        return mesh;
-    //    }
-    //}
-
-    //private Mesh ParseAsciiSTL(byte[] fileData)
-    //{
-    //    string stlText = Encoding.UTF8.GetString(fileData);
-    //    StringReader reader = new StringReader(stlText);
-
-    //    List<Vector3> vertices = new List<Vector3>();
-    //    List<int> triangles = new List<int>();
-
-    //    string line;
-    //    while ((line = reader.ReadLine()) != null)
-    //    {
-    //        line = line.Trim();
-    //        if (line.StartsWith("vertex"))
-    //        {
-    //            string[] parts = line.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
-    //            float x = float.Parse(parts[1]);
-    //            float y = float.Parse(parts[2]);
-    //            float z = float.Parse(parts[3]);
-
-    //            vertices.Add(new Vector3(x, y, z));
-    //            triangles.Add(vertices.Count - 1);
-    //        }
-    //    }
-
-    //    Mesh mesh = new Mesh
-    //    {
-    //        vertices = vertices.ToArray(),
-    //        triangles = triangles.ToArray()
-    //    };
-    //    mesh.RecalculateNormals();
-    //    return mesh;
-    //}
     private void OnDestroy()
     {
         StopAllCoroutines();
