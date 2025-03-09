@@ -1,0 +1,80 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel VoxelizeMesh
+
+RWStructuredBuffer<uint> VoxelGrid;
+StructuredBuffer<float3> Vertices;
+StructuredBuffer<uint3> Triangles;
+
+uint GridsizeX, GridsizeY, GridsizeZ;
+float3 MinBounds;
+float Voxelsize;
+
+uint TriangleCount;
+
+bool TrianglesAABBIntersection(float3 v0, float3 v1, float3 v2, float3 voxelPos, float voxelSize)
+{
+    float3 boxMin = voxelPos;
+    float3 boxMax = voxelPos + voxelSize;
+
+    // Compute triangle bounding box
+    float3 triMin = min(v0, min(v1, v2));
+    float3 triMax = max(v0, max(v1, v2));
+
+    // Early rejection: If triangle's bounding box does not overlap the voxel's bounding box
+    if (triMax.x < boxMin.x || triMin.x > boxMax.x)
+    {
+        return false;
+    }
+    if (triMax.y < boxMin.y || triMin.y > boxMax.y)
+    {
+        return false;
+    }
+    if (triMax.z < boxMin.z || triMin.z > boxMax.z)
+    {
+        return false;
+    }
+
+    // More precise intersection test (using SAT - Separating Axis Theorem)
+    float3 edges[3] = { v1 - v0, v2 - v1, v0 - v2 };
+    float3 boxCenter = (boxMin + boxMax) * 0.5;
+    float3 boxHalfSize = (boxMax - boxMin) * 0.5;
+
+    // Triangle Normal
+    float3 triNormal = normalize(cross(edges[0], edges[1]));
+    float triDist = dot(triNormal, v0);
+
+    // Project box onto triangle normal
+    float boxProjRadius = dot(abs(triNormal), boxHalfSize);
+    float boxProjCenter = dot(triNormal, boxCenter);
+
+    if (abs(triDist - boxProjCenter) > boxProjRadius)
+    {
+        return false; // No intersection
+    }
+    return true; // Triangle intersects the voxel
+}
+
+
+[numthreads(8,8,8)]
+void VoxelizeMesh(uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    if (id.x >= GridsizeX || id.y >= GridsizeY || id.z >= GridsizeZ)
+    {
+        return;
+    }
+    float3 voxelPos = MinBounds + float3(id.x, id.y, id.z) * Voxelsize;
+    
+    for (uint i = 0; i < TriangleCount; i++)
+    {
+        float3 v0 = Vertices[Triangles[i].x];
+        float3 v1 = Vertices[Triangles[i].y];
+        float3 v2 = Vertices[Triangles[i].z];
+        
+        if (TrianglesAABBIntersection(v0, v1, v2, voxelPos, Voxelsize))
+        {
+            uint index = id.z * GridsizeX * GridsizeY + id.y * GridsizeX + id.x;
+            VoxelGrid[index] = 1;
+        }
+    }
+}

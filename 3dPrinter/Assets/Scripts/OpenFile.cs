@@ -8,17 +8,14 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using System.Collections;
-using System.Runtime.CompilerServices;
-using UnityEngine.UI;
-using TMPro;
 using System.Linq;
-using UnityEngine.UIElements;
 using System.Threading;
 
 public class OpenFile : MonoBehaviour
 {
     [HideInInspector]
     public GameObject model;
+    private MeshFilter modelfilter;
     [SerializeField]
     private float LayerHeight = 10f;
     private Vector3[] vertices;
@@ -28,6 +25,9 @@ public class OpenFile : MonoBehaviour
     List<List<Vector3>> slices = new List<List<Vector3>>();
     public Material lineMaterial;
     private CancellationTokenSource cancellationTokenSource;
+    public Material sliceMaterial;
+
+    public ComputeShader VoxelCompute;
     //private SaveSTLtoOBJ stlConverter;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -204,12 +204,16 @@ public class OpenFile : MonoBehaviour
 
         model = new OBJLoader().Load(textStream);
 
-        Task precomputeTask = PrecomputeModel();
-        yield return new WaitUntil(() => precomputeTask.IsCompleted);
+        Voxalizer voxalizer = gameObject.AddComponent<Voxalizer>();
+        voxalizer.VoxelCompute = VoxelCompute;
+        voxalizer.Voxalize(model);
+
+        //Task precomputeTask = PrecomputeModel();
+        //yield return new WaitUntil(() => precomputeTask.IsCompleted);
 
         Mesh mesh = model.GetComponentInChildren<MeshFilter>().mesh;
 
-        yield return StartCoroutine(WaterTightness());
+        //yield return StartCoroutine(WaterTightness());
         Shader customShader = Shader.Find("Universal Render Pipeline/Lit");
         if (customShader == null)
         {
@@ -318,9 +322,7 @@ public class OpenFile : MonoBehaviour
             Debug.Log($"Total Iterations: {(int)((maxY - minY) / LayerHeight)}");
             for (float height = minY; height <= maxY; height += LayerHeight)
             {
-                Debug.Log("par runs");
                 List<Vector3> slicepoints = new List<Vector3>();
-                Debug.Log("Entering foreach loop...");
                 foreach (var (v1, v2, v3) in triangleVertices)
                 {
                     Debug.Log($"Checking Triangle: V1={v1}, V2={v2}, V3={v3} at height {height}");
@@ -352,18 +354,8 @@ public class OpenFile : MonoBehaviour
                     }
                     //slices.Add(slicepoints);
                 }
-                //if (slices.Count % 50 == 0)
-                //{
-                //    await Task.Yield(); // Wait for the next frame
-                //}
             }
             Debug.Log(slices.Count);
-            //for (float height = minY; height <= maxY; height += LayerHeight)
-            //{
-            //    //Debug.Log($"Slicing at height: {height}");
-            //    //List<Vector3> slicepoints = new List<Vector3>();
-
-            //}
         });
 
         Debug.Log(slices.Count);
@@ -395,63 +387,36 @@ public class OpenFile : MonoBehaviour
             lr.SetPositions(slice.ToArray());
         }
     }
-    //public List<List<Vector3>> Slicing()
-    //{
-    //    if (model == null)
-    //    {
-    //        Debug.LogError("Model not found");
-    //        return null;
-    //    }
-    //    List<List<Vector3>> slices = new List<List<Vector3>>();
-    //    Mesh mesh = model.GetComponentInChildren<MeshFilter>().mesh;
-    //    Vector3[] vertices = mesh.vertices;
-    //    int[] triangles = mesh.triangles;
-    //    float minY = mesh.bounds.min.y;
-    //    float maxY = mesh.bounds.max.y;
-    //    for(float height = minY; height <= maxY; height += LayerHeight)
-    //    {
-    //        List<Vector3> slicepoints = new List<Vector3>();
 
-    //        for(int i = 0; i < triangles.Length; i += 3)
-    //        {
-    //            Vector3 v1 = vertices[triangles[i]];
-    //            Vector3 v2 = vertices[triangles[i + 1]];
-    //            Vector3 v3 = vertices[triangles[i + 2]];
-
-    //            Vector3? p1 = IntersectEdges(v1, v2, height);
-    //            Vector3? p2 = IntersectEdges(v2, v3, height);
-    //            Vector3? p3 = IntersectEdges(v3, v1, height);
-
-    //            if (p1.HasValue)
-    //            {
-    //                slicepoints.Add(p1.Value);
-    //            }
-    //            if (p2.HasValue)
-    //            {
-    //                slicepoints.Add(p2.Value);
-    //            }
-    //            if (p3.HasValue)
-    //            {
-    //                slicepoints.Add(p3.Value);
-    //            }
-    //        }
-    //        slices.Add(slicepoints);
-    //    }
-    //    return slices;
-    //}
-
-    private Vector3? IntersectEdges(Vector3 v1, Vector3 v2, float height)
+    private Vector3? IntersectEdges(Vector3 v1, Vector3 v2, float height, float tolerance = 1e-6f)
     {
         Debug.Log($"Checking edge: {v1} -> {v2} for intersection at height {height}");
+
+        // Check if the edge is near the slicing plane within the given tolerance
+        if (Mathf.Abs(v1.y - v2.y) < tolerance)
+        {
+            // If the edge is almost parallel to the slicing plane (horizontal), no intersection occurs
+            return null;
+        }
+
+        // Check if the two vertices are on opposite sides of the slicing plane
         if ((v1.y > height && v2.y < height) || (v1.y < height && v2.y > height))
         {
+            // Linear interpolation to find the intersection point on the edge
             float t = (height - v1.y) / (v2.y - v1.y);
-            Debug.Log("intersected");
-            return v1 + t * (v2 - v1);
+
+            // Calculate the intersection point using interpolation
+            Vector3 intersection = Vector3.Lerp(v1, v2, t);
+
+            // Log for debugging
+            Debug.Log($"Intersection found: {intersection}");
+
+            return intersection;
         }
+
+        // No intersection if the edge is completely above or below the slicing plane
         return null;
     }
-
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.E))

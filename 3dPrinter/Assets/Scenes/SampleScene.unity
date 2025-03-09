@@ -599,6 +599,8 @@ MonoBehaviour:
   model: {fileID: 0}
   LayerHeight: 0.2
   lineMaterial: {fileID: 2100000, guid: 6b9c69306e3e5b1488de86bf546e010f, type: 2}
+  sliceMaterial: {fileID: 2100000, guid: 61b7ad4c3d938d849a74d4a34eca8c26, type: 2}
+  VoxelCompute: {fileID: 7200000, guid: b6944c2c7e2038e4ca1f3920e653f413, type: 3}
 --- !u!114 &990884833
 MonoBehaviour:
   m_ObjectHideFlags: 0
